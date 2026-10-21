@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Visor 3D & Realidad Aumentada (AR)</title>
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Phosphor Icons -->
+  <script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+
+  <!-- QR Code Generator CDN (qrcodejs) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <!-- Google Model Viewer (Official Web Component for 3D & WebXR/Quick Look AR) -->
+  <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              400: '#818cf8',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Estilos personalizados para model-viewer */
+    model-viewer {
+      width: 100%;
+      height: 100%;
+      --poster-color: transparent;
+      outline: none;
+    }
+
+    /* Animación del indicador de carga de model-viewer */
+    .progress-bar {
+      display: block;
+      width: 33%;
+      height: 10%;
+      max-height: 2px;
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate3d(-50%, -50%, 0);
+      border-radius: 9999px;
+      box-shadow: 0px 3px 10px 3px rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.9);
+      background-color: rgba(0, 0, 0, 0.5);
+    }
+
+    .progress-bar.hide {
+      visibility: hidden;
+      transition: visibility 0.3s;
+    }
+
+    .update-bar {
+      background-color: rgba(99, 102, 241, 0.9);
+      width: 0%;
+      height: 100%;
+      border-radius: 9999px;
+      float: left;
+      transition: width 0.3s;
+    }
+
+    /* Glassmorphism panel */
+    .glass-panel {
+      background: rgba(255, 255, 255, 0.75);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.35);
+    }
+    .dark .glass-panel {
+      background: rgba(15, 23, 42, 0.78);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    /* Ocultar scrollbar estándar */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 dark:bg-slate-950 dark:text-slate-100 min-h-screen transition-colors duration-300 font-sans overflow-x-hidden selection:bg-brand-500 selection:text-white">
+
+  <!-- Contenedor Principal en Pantalla Completa -->
+  <div class="relative w-screen h-screen flex flex-col overflow-hidden">
+
+    <!-- Header Flotante Superior -->
+    <header class="absolute top-3 left-3 right-3 sm:top-5 sm:left-6 sm:right-6 z-20 flex items-center justify-between pointer-events-none">
+      
+      <!-- Marca y Estado -->
+      <div class="pointer-events-auto glass-panel px-4 py-2.5 rounded-2xl shadow-lg flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-400 flex items-center justify-center text-white shadow-md shadow-brand-500/30">
+          <i class="ph-bold ph-cube text-xl"></i>
+        </div>
+        <div>
+          <h1 class="text-xs uppercase tracking-wider font-extrabold text-brand-600 dark:text-brand-400 leading-tight">3D & AR Studio</h1>
+          <p id="model-name-display" class="text-sm font-bold text-slate-900 dark:text-white truncate max-w-[140px] sm:max-w-xs">Astronauta</p>
+        </div>
+      </div>
+
+      <!-- Acciones Rápidas Superiores: QR, Tema, Ayuda -->
+      <div class="pointer-events-auto flex items-center gap-2">
+        <!-- Botón Abrir QR Modal -->
+        <button id="btn-open-qr" title="Escanear en Teléfono con QR" class="glass-panel px-3.5 py-2.5 rounded-2xl shadow-lg hover:shadow-brand-500/20 active:scale-95 transition flex items-center gap-2 font-medium text-sm text-slate-700 dark:text-slate-200 group">
+          <i class="ph-bold ph-qr-code text-lg text-brand-600 dark:text-brand-400 group-hover:scale-110 transition-transform"></i>
+          <span class="hidden sm:inline">Escanear QR</span>
+        </button>
+
+        <!-- Toggle Modo Oscuro -->
+        <button id="btn-theme-toggle" title="Cambiar Tema" class="glass-panel w-11 h-11 rounded-2xl shadow-lg hover:shadow-brand-500/20 active:scale-95 transition flex items-center justify-center text-slate-700 dark:text-slate-200">
+          <i id="theme-icon" class="ph-bold ph-moon text-lg"></i>
+        </button>
+
+        <!-- Botón Guía AR -->
+        <button id="btn-help-toggle" title="Información de Realidad Aumentada" class="glass-panel w-11 h-11 rounded-2xl shadow-lg hover:shadow-brand-500/20 active:scale-95 transition flex items-center justify-center text-slate-700 dark:text-slate-200">
+          <i class="ph-bold ph-question text-lg"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Canvas Central del Visor 3D de Google Model Viewer -->
+    <main class="w-full h-full relative flex-1">
+      
+      <!-- Componente model-viewer nativo -->
+      <model-viewer
+        id="main-viewer"
+        src="https://modelviewer.dev/shared-assets/models/Astronaut.glb"
+        alt="Modelo interactivo 3D y Realidad Aumentada"
+        ar
+        ar-modes="webxr scene-viewer quick-look"
+        ar-scale="auto"
+        camera-controls
+        touch-action="pan-y"
+        auto-rotate
+        rotation-per-second="25deg"
+        shadow-intensity="1.2"
+        shadow-softness="0.8"
+        environment-image="neutral"
+        exposure="1"
+        interaction-prompt="auto"
+        class="w-full h-full cursor-grab active:cursor-grabbing">
+
+        <!-- Barra de Progreso Personalizada -->
+        <div class="progress-bar" slot="progress-bar">
+          <div class="update-bar" id="update-bar"></div>
+        </div>
+
+        <!-- Botón Nativo AR oculto / delegado -->
+        <button slot="ar-button" id="ar-native-button" class="hidden">
+          Ver en AR
+        </button>
+      </model-viewer>
+
+      <!-- Badge de ayuda de interacción táctil/ratón -->
+      <div id="gesture-hint" class="absolute top-24 left-1/2 -translate-x-1/2 pointer-events-none opacity-80 transition-opacity duration-700">
+        <div class="glass-panel px-3 py-1.5 rounded-full text-xs font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-1.5 shadow">
+          <i class="ph-bold ph-hand-pointing"></i> Arrastra para girar · Pellizca para zoom
+        </div>
+      </div>
+
+      <!-- Barra de Herramientas Flotante Lateral Izquierda (Ajustes de Vista 3D) -->
+      <div class="absolute left-3 sm:left-6 top-1/2 -translate-y-1/2 z-10 flex flex-col gap-2">
+        <button id="btn-reset-cam" title="Reiniciar Cámara" class="glass-panel w-10 h-10 sm:w-11 sm:h-11 rounded-2xl shadow-md hover:text-brand-500 active:scale-90 transition flex items-center justify-center text-slate-700 dark:text-slate-200">
+          <i class="ph-bold ph-arrows-counter-clockwise text-lg"></i>
+        </button>
+
+        <button id="btn-toggle-rotate" title="Pausar / Reanudar Auto-rotación" class="glass-panel w-10 h-10 sm:w-11 sm:h-11 rounded-2xl shadow-md text-brand-600 dark:text-brand-400 active:scale-90 transition flex items-center justify-center">
+          <i id="rotate-icon" class="ph-bold ph-spinner-gap text-lg"></i>
+        </button>
+
+        <button id="btn-toggle-shadow" title="Alternar Sombra" class="glass-panel w-10 h-10 sm:w-11 sm:h-11 rounded-2xl shadow-md text-slate-700 dark:text-slate-200 active:scale-90 transition flex items-center justify-center">
+          <i class="ph-bold ph-sun text-lg"></i>
+        </button>
+      </div>
+
+    </main>
+
+    <!-- Barra Inferior Flotante: Selector de Modelos + Botón Principal AR -->
+    <footer class="absolute bottom-4 left-3 right-3 sm:bottom-6 sm:left-6 sm:right-6 z-20 flex flex-col sm:flex-row items-center justify-between gap-3 pointer-events-none">
+      
+      <!-- Carrusel Selector de Modelos Predefinidos y Carga de Archivo Propio -->
+      <div class="pointer-events-auto w-full sm:w-auto glass-panel p-2 rounded-2xl shadow-xl flex items-center gap-2 overflow-x-auto no-scrollbar">
+        
+        <!-- Botones de Modelos Demo -->
+        <button class="model-preset-btn active-preset px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-2 shrink-0 bg-brand-600 text-white shadow-md shadow-brand-500/30"
+          data-src="https://modelviewer.dev/shared-assets/models/Astronaut.glb"
+          data-name="Astronauta">
+          <i class="ph-bold ph-rocket-launch"></i> Astronauta
+        </button>
+
+        <button class="model-preset-btn px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800/60 transition flex items-center gap-2 shrink-0"
+          data-src="https://modelviewer.dev/shared-assets/models/NeilArmstrong.glb"
+          data-name="Traje Espacial">
+          <i class="ph-bold ph-user"></i> Traje
+        </button>
+
+        <button class="model-preset-btn px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800/60 transition flex items-center gap-2 shrink-0"
+          data-src="https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/MaterialsVariantsShoe/glTF-Binary/MaterialsVariantsShoe.glb"
+          data-name="Zapato Deportivo">
+          <i class="ph-bold ph-sneaker-move"></i> Sneaker
+        </button>
+
+        <button class="model-preset-btn px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800/60 transition flex items-center gap-2 shrink-0"
+          data-src="https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/SheenChair/glTF-Binary/SheenChair.glb"
+          data-name="Silla Nórdica">
+          <i class="ph-bold ph-armchair"></i> Silla
+        </button>
+
+        <!-- Separador -->
+        <div class="h-6 w-[1px] bg-slate-300 dark:bg-slate-700 shrink-0 mx-1"></div>
+
+        <!-- Botón para subir modelo local (.glb / .gltf) -->
+        <label for="custom-file-input" class="cursor-pointer px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-950/40 hover:bg-brand-100 dark:hover:bg-brand-900/40 border border-brand-200 dark:border-brand-800/60 transition flex items-center gap-2 shrink-0">
+          <i class="ph-bold ph-upload-simple"></i> Subir .GLB
+          <input type="file" id="custom-file-input" accept=".glb,.gltf" class="hidden">
+        </label>
+      </div>
+
+      <!-- BOTÓN PRINCIPAL: Ver en Realidad Aumentada (AR) -->
+      <div class="pointer-events-auto w-full sm:w-auto flex justify-center">
+        <button id="btn-trigger-ar" class="w-full sm:w-auto relative group overflow-hidden px-6 py-3.5 rounded-2xl bg-gradient-to-r from-brand-600 via-indigo-600 to-purple-600 text-white font-bold text-sm sm:text-base shadow-xl shadow-brand-600/35 hover:shadow-brand-600/50 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3">
+          <span class="absolute inset-0 w-full h-full bg-white/20 transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></span>
+          <i class="ph-bold ph-view-in-ar text-2xl animate-pulse"></i>
+          <span>Ver en Realidad Aumentada (AR)</span>
+        </button>
+      </div>
+    </footer>
+
+    <!-- MODAL: CÓDIGO QR PARA CELULAR -->
+    <div id="qr-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-md opacity-0 pointer-events-none transition-opacity duration-300 flex items-center justify-center p-4">
+      <div class="glass-panel w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-white/20 relative transform scale-95 transition-transform duration-300" id="qr-modal-card">
+        
+        <!-- Cerrar Modal -->
+        <button id="btn-close-qr" class="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 flex items-center justify-center transition">
+          <i class="ph-bold ph-x text-lg"></i>
+        </button>
+
+        <div class="text-center mb-4">
+          <div class="inline-flex p-3 rounded-2xl bg-brand-100 dark:bg-brand-950 text-brand-600 dark:text-brand-400 mb-2">
+            <i class="ph-bold ph-device-mobile-camera text-2xl"></i>
+          </div>
+          <h2 class="text-xl font-extrabold text-slate-900 dark:text-white">Abre en tu Teléfono</h2>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Escanea el código con la cámara de tu celular para ver este modelo en Realidad Aumentada en tu sala o mesa.</p>
+        </div>
+
+        <!-- Contenedor del Código QR -->
+        <div class="bg-white p-4 rounded-2xl shadow-inner flex items-center justify-center mx-auto w-fit mb-4">
+          <div id="qrcode-canvas"></div>
+        </div>
+
+        <!-- URL y Copiar -->
+        <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
+          <input type="text" id="qr-url-input" readonly class="bg-transparent flex-1 text-slate-600 dark:text-slate-400 truncate outline-none select-all px-1">
+          <button id="btn-copy-url" class="px-2.5 py-1.5 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 transition flex items-center gap-1">
+            <i class="ph-bold ph-copy"></i> Copiar
+          </button>
+        </div>
+        <p id="copy-msg" class="text-center text-xs text-emerald-600 font-semibold h-4 mt-1 opacity-0 transition-opacity">¡Enlace copiado al portapapeles!</p>
+      </div>
+    </div>
+
+    <!-- MODAL: GUÍA DE COMPATIBILIDAD AR -->
+    <div id="help-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-md opacity-0 pointer-events-none transition-opacity duration-300 flex items-center justify-center p-4">
+      <div class="glass-panel w-full max-w-md rounded-3xl p-6 shadow-2xl border border-white/20 relative transform scale-95 transition-transform duration-300" id="help-modal-card">
+        
+        <button id="btn-close-help" class="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 flex items-center justify-center transition">
+          <i class="ph-bold ph-x text-lg"></i>
+        </button>
+
+        <h3 class="text-xl font-bold mb-3 text-slate-900 dark:text-white flex items-center gap-2">
+          <i class="ph-bold ph-sparkle text-brand-600"></i> ¿Cómo funciona la Realidad Aumentada?
+        </h3>
+
+        <div class="space-y-3 text-xs sm:text-sm text-slate-600 dark:text-slate-300">
+          <div class="p-3 rounded-2xl bg-slate-100/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800">
+            <span class="font-bold text-slate-900 dark:text-white flex items-center gap-1.5 mb-1">
+              <i class="ph-bold ph-android-logo text-emerald-500"></i> En Android:
+            </span>
+            Requiere Google Chrome y los <em>Servicios de Google Play para RA (ARCore)</em>. Se abre Scene Viewer / WebXR de inmediato al presionar el botón de AR.
+          </div>
+
+          <div class="p-3 rounded-2xl bg-slate-100/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800">
+            <span class="font-bold text-slate-900 dark:text-white flex items-center gap-1.5 mb-1">
+              <i class="ph-bold ph-apple-logo text-blue-500"></i> En iPhone / iPad (iOS):
+            </span>
+            Abre la página preferentemente en <strong>Safari</strong>. Al presionar el botón de AR, se activa el visor nativo <em>AR Quick Look</em> de Apple permitiendo posicionar el objeto en tu espacio real.
+          </div>
+
+          <div class="p-3 rounded-2xl bg-slate-100/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800">
+            <span class="font-bold text-slate-900 dark:text-white flex items-center gap-1.5 mb-1">
+              <i class="ph-bold ph-desktop text-purple-500"></i> ¿Estás en un ordenador de escritorio?
+            </span>
+            Haz clic en <strong>Escanear QR</strong> arriba para abrir esta misma página en tu móvil al instante con tu cámara.
+          </div>
+        </div>
+
+        <button id="btn-understood-help" class="w-full mt-5 py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm transition">
+          ¡Entendido!
+        </button>
+      </div>
+    </div>
+
+    <!-- Toast de Notificaciones -->
+    <div id="toast" class="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 pointer-events-none transform translate-y-8 opacity-0 transition-all duration-300">
+      <div class="glass-panel px-4 py-2.5 rounded-2xl shadow-2xl text-xs sm:text-sm font-semibold flex items-center gap-2 border border-brand-500/30 text-slate-800 dark:text-white">
+        <i id="toast-icon" class="ph-bold ph-info text-brand-600 text-base"></i>
+        <span id="toast-text">Mensaje</span>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // Referencias al DOM
+    const viewer = document.getElementById('main-viewer');
+    const updateBar = document.getElementById('update-bar');
+    const modelNameDisplay = document.getElementById('model-name-display');
+    const presetButtons = document.querySelectorAll('.model-preset-btn');
+    const customFileInput = document.getElementById('custom-file-input');
+    const btnTriggerAr = document.getElementById('btn-trigger-ar');
+    const btnResetCam = document.getElementById('btn-reset-cam');
+    const btnToggleRotate = document.getElementById('btn-toggle-rotate');
+    const rotateIcon = document.getElementById('rotate-icon');
+    const btnToggleShadow = document.getElementById('btn-toggle-shadow');
+    const btnThemeToggle = document.getElementById('btn-theme-toggle');
+    const themeIcon = document.getElementById('theme-icon');
+    const btnOpenQr = document.getElementById('btn-open-qr');
+    const btnCloseQr = document.getElementById('btn-close-qr');
+    const qrModal = document.getElementById('qr-modal');
+    const qrModalCard = document.getElementById('qr-modal-card');
+    const qrUrlInput = document.getElementById('qr-url-input');
+    const btnCopyUrl = document.getElementById('btn-copy-url');
+    const copyMsg = document.getElementById('copy-msg');
+    const btnHelpToggle = document.getElementById('btn-help-toggle');
+    const btnCloseHelp = document.getElementById('btn-close-help');
+    const btnUnderstoodHelp = document.getElementById('btn-understood-help');
+    const helpModal = document.getElementById('help-modal');
+    const helpModalCard = document.getElementById('help-modal-card');
+    const gestureHint = document.getElementById('gesture-hint');
+
+    let qrcodeInstance = null;
+    let isAutoRotating = true;
+    let hasShadow = true;
+
+    // Toast feedback visual
+    function showToast(message, icon = 'ph-info') {
+      const toast = document.getElementById('toast');
+      const toastText = document.getElementById('toast-text');
+      const toastIcon = document.getElementById('toast-icon');
+
+      toastText.textContent = message;
+      toastIcon.className = `ph-bold ${icon} text-brand-600 text-base`;
+
+      toast.classList.remove('translate-y-8', 'opacity-0');
+      toast.classList.add('translate-y-0', 'opacity-100');
+
+      setTimeout(() => {
+        toast.classList.remove('translate-y-0', 'opacity-100');
+        toast.classList.add('translate-y-8', 'opacity-0');
+      }, 2500);
+    }
+
+    // Progreso de carga del model-viewer
+    viewer.addEventListener('progress', (event) => {
+      const progressBar = event.target.querySelector('.progress-bar');
+      const updatingBar = event.target.querySelector('.update-bar');
+      if (updatingBar && progressBar) {
+        updatingBar.style.width = `${event.detail.totalProgress * 100}%`;
+        if (event.detail.totalProgress === 1) {
+          progressBar.classList.add('hide');
+        } else {
+          progressBar.classList.remove('hide');
+        }
+      }
+    });
+
+    viewer.addEventListener('load', () => {
+      // Ocultar hint de gestos luego de unos segundos
+      setTimeout(() => {
+        if (gestureHint) gestureHint.style.opacity = '0';
+      }, 3500);
+    });
+
+    // Cambio de modelo predefinido
+    presetButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const src = btn.getAttribute('data-src');
+        const name = btn.getAttribute('data-name');
+
+        // Actualizar estados visuales de los botones
+        presetButtons.forEach(b => {
+          b.classList.remove('active-preset', 'bg-brand-600', 'text-white', 'shadow-md', 'shadow-brand-500/30');
+          b.classList.add('text-slate-700', 'dark:text-slate-200');
+        });
+        btn.classList.add('active-preset', 'bg-brand-600', 'text-white', 'shadow-md', 'shadow-brand-500/30');
+        btn.classList.remove('text-slate-700', 'dark:text-slate-200');
+
+        modelNameDisplay.textContent = name;
+        viewer.src = src;
+        showToast(`Cargando ${name}...`, 'ph-cube');
+      });
+    });
+
+    // Carga de archivo propio (.glb / .gltf)
+    customFileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const fileName = file.name;
+      const fileUrl = URL.createObjectURL(file);
+
+      // Desactivar botones de presets activos
+      presetButtons.forEach(b => {
+        b.classList.remove('active-preset', 'bg-brand-600', 'text-white', 'shadow-md', 'shadow-brand-500/30');
+        b.classList.add('text-slate-700', 'dark:text-slate-200');
+      });
+
+      viewer.src = fileUrl;
+      modelNameDisplay.textContent = fileName.length > 18 ? fileName.substring(0, 15) + '...' : fileName;
+      showToast(`Archivo local cargado: ${fileName}`, 'ph-check-circle');
+    });
+
+    // Botón Principal de Realidad Aumentada (AR)
+    btnTriggerAr.addEventListener('click', () => {
+      // Intentar activar el modo AR con la API de Google model-viewer
+      if (viewer.canActivateAR) {
+        viewer.activateAR();
+      } else {
+        // En desktop o navegadores sin AR nativo, abrir el modal QR
+        showToast('Abriendo código QR para tu celular...', 'ph-device-mobile-camera');
+        openQrModal();
+      }
+    });
+
+    // Alternar Auto-rotación
+    btnToggleRotate.addEventListener('click', () => {
+      isAutoRotating = !isAutoRotating;
+      viewer.autoRotate = isAutoRotating;
+      if (isAutoRotating) {
+        rotateIcon.className = 'ph-bold ph-spinner-gap text-lg animate-spin';
+        showToast('Auto-rotación activada', 'ph-play');
+      } else {
+        rotateIcon.className = 'ph-bold ph-stop text-lg';
+        showToast('Auto-rotación pausada', 'ph-pause');
+      }
+    });
+
+    // Reiniciar Cámara
+    btnResetCam.addEventListener('click', () => {
+      viewer.cameraOrbit = '0deg 75deg 105%';
+      viewer.fieldOfView = 'auto';
+      viewer.jumpCameraToGoal();
+      showToast('Cámara restablecida', 'ph-arrows-counter-clockwise');
+    });
+
+    // Alternar Sombra
+    btnToggleShadow.addEventListener('click', () => {
+      hasShadow = !hasShadow;
+      viewer.shadowIntensity = hasShadow ? 1.2 : 0;
+      showToast(hasShadow ? 'Sombra activada' : 'Sombra desactivada', 'ph-sun');
+    });
+
+    // Modo Oscuro / Claro
+    function initTheme() {
+      const isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+        themeIcon.className = 'ph-bold ph-sun text-lg';
+      }
+    }
+    initTheme();
+
+    btnThemeToggle.addEventListener('click', () => {
+      document.documentElement.classList.toggle('dark');
+      const isDark = document.documentElement.classList.contains('dark');
+      themeIcon.className = isDark ? 'ph-bold ph-sun text-lg' : 'ph-bold ph-moon text-lg';
+    });
+
+    // Generador de Código QR
+    function getShareableUrl() {
+      // Usa la URL actual del navegador
+      return window.location.href;
+    }
+
+    function generateQr() {
+      const qrContainer = document.getElementById('qrcode-canvas');
+      qrContainer.innerHTML = ''; // Limpiar previo
+
+      const currentUrl = getShareableUrl();
+      qrUrlInput.value = currentUrl;
+
+      qrcodeInstance = new QRCode(qrContainer, {
+        text: currentUrl,
+        width: 190,
+        height: 190,
+        colorDark: "#1e1b4b",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.M
+      });
+    }
+
+    function openQrModal() {
+      generateQr();
+      qrModal.classList.remove('opacity-0', 'pointer-events-none');
+      qrModal.classList.add('opacity-100', 'pointer-events-auto');
+      qrModalCard.classList.remove('scale-95');
+      qrModalCard.classList.add('scale-100');
+    }
+
+    function closeQrModal() {
+      qrModal.classList.remove('opacity-100', 'pointer-events-auto');
+      qrModal.classList.add('opacity-0', 'pointer-events-none');
+      qrModalCard.classList.remove('scale-100');
+      qrModalCard.classList.add('scale-95');
+      copyMsg.classList.add('opacity-0');
+    }
+
+    btnOpenQr.addEventListener('click', openQrModal);
+    btnCloseQr.addEventListener('click', closeQrModal);
+    qrModal.addEventListener('click', (e) => {
+      if (e.target === qrModal) closeQrModal();
+    });
+
+    // Copiar URL al portapapeles usando document.execCommand para compatibilidad con iframes
+    btnCopyUrl.addEventListener('click', () => {
+      qrUrlInput.select();
+      qrUrlInput.setSelectionRange(0, 99999);
+      try {
+        document.execCommand('copy');
+        copyMsg.classList.remove('opacity-0');
+        setTimeout(() => copyMsg.classList.add('opacity-0'), 2500);
+      } catch (err) {
+        showToast('No se pudo copiar el enlace', 'ph-warning');
+      }
+    });
+
+    // Modal de Ayuda AR
+    function openHelpModal() {
+      helpModal.classList.remove('opacity-0', 'pointer-events-none');
+      helpModal.classList.add('opacity-100', 'pointer-events-auto');
+      helpModalCard.classList.remove('scale-95');
+      helpModalCard.classList.add('scale-100');
+    }
+
+    function closeHelpModal() {
+      helpModal.classList.remove('opacity-100', 'pointer-events-auto');
+      helpModal.classList.add('opacity-0', 'pointer-events-none');
+      helpModalCard.classList.remove('scale-100');
+      helpModalCard.classList.add('scale-95');
+    }
+
+    btnHelpToggle.addEventListener('click', openHelpModal);
+    btnCloseHelp.addEventListener('click', closeHelpModal);
+    btnUnderstoodHelp.addEventListener('click', closeHelpModal);
+    helpModal.addEventListener('click', (e) => {
+      if (e.target === helpModal) closeHelpModal();
+    });
+
+    // Escape key para cerrar modales
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeQrModal();
+        closeHelpModal();
+      }
+    });
+
+    // Soporte Drag and Drop directo en el visor para cargar modelos
+    window.addEventListener('dragover', (e) => e.preventDefault());
+    window.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        const file = files[0];
+        if (file.name.endsWith('.glb') || file.name.endsWith('.gltf')) {
+          const fileUrl = URL.createObjectURL(file);
+          viewer.src = fileUrl;
+          modelNameDisplay.textContent = file.name;
+          showToast(`Cargado vía arrastrar y soltar: ${file.name}`, 'ph-check-circle');
+        } else {
+          showToast('Por favor sube un archivo 3D .glb o .gltf', 'ph-warning');
+        }
+      }
+    });
+  </script>
+</body>
+</html>
